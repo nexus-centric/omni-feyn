@@ -1,0 +1,12 @@
+{
+  "name": "Omni Feyn",
+  "short_name": "Omni Feyn",
+  "description": "Learn a topic in depth, explain it out loud, measure your delivery.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#f7f6f2",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

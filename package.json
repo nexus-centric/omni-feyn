@@ -1,0 +1,27 @@
+{
+  "name": "omni-feyn",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Learn any topic at the depth you choose, explain it out loud, and measure how well you explained it. Runs fully in the browser.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "tsc -p tsconfig.test.json && node tmp/test-build/tests/metrics.test.js",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "playwright": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.6"
+  }
+}
