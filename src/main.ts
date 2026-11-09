@@ -1,7 +1,8 @@
 import './style.css';
 import { h, toast, fmtTime, fmtDate, trendChart } from './ui';
 import { db, uid, exportBackup, importBackup } from './db';
-import { BANK, CATEGORY, Drawer, categoriesFor, type BankItem } from './core/bank';
+import { guideFor, type GuideInput, type GuideStep } from './core/guide';
+import { BANK, CATEGORIES, CATEGORY, Drawer, categoriesFor, type BankItem } from './core/bank';
 import { SOURCES_CHECKED_ON } from './core/bank-meta';
 import { estimate, suggestedHours, windowLabel, fmtHours, type PlanSettings } from './core/estimate';
 import { newTopic as coreNewTopic, topicFromBank as coreTopicFromBank, adoptPlan, englishTitle, renameTopic } from './core/topic';
@@ -144,6 +145,36 @@ function suggestionsPanel(s: Suggestions, depth: Depth, opts: { open?: boolean; 
 
 const bankSuggestions = (it: BankItem): Suggestions => ({ core: it.core, plan: it.plan, keywords: it.keywords, en: it.en, enTerms: it.enTerms, sources: it.sources });
 
+const BANK_INDEX = new Map(Object.values(BANK).flat().map((i) => [i.id, i]));
+const bankGuideInput = (it: BankItem): GuideInput => ({ depth: it.depth, cat: it.cat, title: it.title, en: it.en, disputed: it.flag === 'disputed', book: it.cat === 'sach' });
+function topicGuideInput(t: Topic): GuideInput {
+  const it = t.bankId ? BANK_INDEX.get(t.bankId) : undefined;
+  const cat = it?.cat || CATEGORIES.find((c) => c.name === t.category)?.id;
+  return { depth: t.depth, cat, title: t.title, en: englishTitle(t), disputed: !!t.suggestions?.disputed || it?.flag === 'disputed', book: !!t.suggestions?.book || cat === 'sach' };
+}
+const stepList = (steps: GuideStep[]) => h('ol', { class: 'guide-steps' }, steps.map((s) =>
+  h('li', null, h('b', null, s.name), h('span', { class: 'muted', lang: 'en' }, ` (${s.en})`), h('span', null, `: ${s.tip}`))));
+/** Optional two-step guidance: analyze (issue tree plus one lens), then present. */
+function guidePanel(input: GuideInput, opts: { open?: boolean; hasAngles?: boolean } = {}) {
+  const g = guideFor(input);
+  return h('details', { class: 'guide', open: !!opts.open },
+    h('summary', null, icon('compass'), ' Cách phân tích và trình bày ', h('span', { class: 'muted small' }, '(gợi ý, không bắt buộc)')),
+    h('div', { class: 'guide-step' },
+      h('h4', null, h('span', { class: 'guide-num' }, '1'), 'Phân tích', h('span', { class: 'muted small', lang: 'en' }, ' Analyze')),
+      h('p', null, h('b', null, 'Cây vấn đề'), h('span', { class: 'muted', lang: 'en' }, ' (issue tree, MECE)'), ': chia chủ đề thành vài nhánh không trùng nhau và gộp lại thì đủ.'),
+      stepList(g.mece),
+      opts.hasAngles ? h('p', { class: 'muted small' }, 'Các khía cạnh trong phần gợi ý có thể làm nhánh khởi đầu; kiểm tra lại xem có nhánh nào trùng hoặc còn thiếu.') : null,
+      h('p', null, h('b', null, `Thêm một góc nhìn: ${g.lens.name}`), h('span', { class: 'muted', lang: 'en' }, ` (${g.lens.en})`)),
+      h('p', { class: 'muted small' }, g.lens.why),
+      stepList(g.lens.steps)),
+    h('div', { class: 'guide-step' },
+      h('h4', null, h('span', { class: 'guide-num' }, '2'), 'Trình bày', h('span', { class: 'muted small', lang: 'en' }, ' Present')),
+      h('p', null, h('b', null, g.present.name), h('span', { class: 'muted', lang: 'en' }, ` (${g.present.en})`)),
+      h('p', { class: 'muted small' }, g.present.why),
+      stepList(g.present.steps)),
+    h('p', { class: 'muted small' }, 'Chỉ là một cách làm. Bạn có thể bỏ qua và tự tìm hiểu theo kiểu của mình.'));
+}
+
 // ---------- home ----------
 
 function greeting() {
@@ -234,9 +265,11 @@ async function spinView() {
       depth = d; db.setSetting('spinDepth', d); cat = await db.getSetting<string>(catKey(d), 'all');
       tabs.querySelectorAll('button').forEach((b) => { const on = b.classList.contains(`depth-${d}`); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
       stage.className = `slot depth-${d}`; reel.replaceChildren(); placeholder.hidden = false; result.replaceChildren(); current = null;
-      fillCats(); updateCounter(); hint.textContent = DEPTH_SPIN_HINT[d];
+      fillCats(); updateCounter(); hint.textContent = DEPTH_SPIN_HINT[d]; howPresent.textContent = presentHint(d);
     } }, icon(DEPTH_ICON[d]), DEPTH_LABEL[d])));
   const hint = h('p', { class: 'muted center' }, DEPTH_SPIN_HINT[depth]);
+  const presentHint = (d: Depth) => d === 'minute' ? 'câu trả lời ngắn đi theo PREP: quan điểm, lý do, ví dụ, chốt lại.' : d === 'day' ? 'nêu ý chính trước, rồi đi qua hai ba nhánh như những lý do.' : 'mở bằng toàn cảnh, đi lần lượt từng nhánh, cuối cùng tổng kết.';
+  const howPresent = h('span', null, presentHint(depth));
 
   function renderResult(it: BankItem) {
     const c = CATEGORY[it.cat];
@@ -257,13 +290,14 @@ async function spinView() {
       h('div', { class: 'row wrap' }, h('span', { class: `chip depth-${it.depth}` }, DEPTH_LABEL[it.depth]), h('span', { class: 'chip' }, c.name), it.flag === 'disputed' ? disputedChip() : null),
       h('h2', { class: 'result-title' }, it.title),
       it.en ? h('p', { class: 'title-en', lang: 'en' }, it.en) : null,
-      it.depth === 'minute' ? h('p', { class: 'muted' }, 'Nói 60 giây. Khung P.R.E.P (quan điểm, lý do, ví dụ, chốt lại) có sẵn nếu bạn muốn dùng.') :
+      it.depth === 'minute' ? h('p', { class: 'muted' }, 'Nói khoảng 60 giây. Gợi ý cách phân tích và trình bày ở bên dưới, dùng hay không tuỳ bạn.') :
         h('p', { class: 'muted' }, 'Chủ đề là của bạn: tự chọn góc nhìn và cách tìm hiểu. Gợi ý bên dưới chỉ để tham khảo.'),
       h('div', { class: 'actions' },
         h('button', { class: 'btn primary big', onclick: accept }, ...(it.depth === 'minute' ? [icon('mic'), 'Bắt đầu luyện nói'] : [icon('arrow'), 'Bắt đầu tìm hiểu'])),
         h('button', { class: 'btn big', onclick: () => spin() }, icon('refresh'), 'Chọn chủ đề khác')),
       est ? h('div', { class: 'est-wrap' }, h('h3', null, icon('hourglass'), 'Ước lượng thời gian (chỉnh được sau)'), est, it.cat === 'sach' ? bookNote() : null) : null,
-      it.depth !== 'minute' ? suggestionsPanel(bankSuggestions(it), it.depth) : null));
+      it.depth !== 'minute' ? suggestionsPanel(bankSuggestions(it), it.depth) : null,
+      guidePanel(bankGuideInput(it), { hasAngles: it.plan.length > 0 })));
   }
 
   async function spin() {
@@ -309,12 +343,11 @@ async function spinView() {
       h('div', { class: 'center' }, spinBtn),
       h('p', { class: 'muted small center' }, 'Phím tắt: Space để chọn ngẫu nhiên, Enter để bắt đầu')),
     result,
-    depth === 'minute' || legacy ? h('section', { class: 'card' }, h('h2', null, 'Khung P.R.E.P cho câu hỏi 1 phút'),
-      h('ol', { class: 'prep-guide' },
-        h('li', null, h('b', null, 'Point'), ' - nêu quan điểm ngay câu đầu ("Theo tôi...").'),
-        h('li', null, h('b', null, 'Reason'), ' - một hoặc hai lý do chính ("Vì...").'),
-        h('li', null, h('b', null, 'Example'), ' - ví dụ cụ thể, số liệu, câu chuyện ("Ví dụ...").'),
-        h('li', null, h('b', null, 'Point'), ' - chốt lại quan điểm ("Tóm lại...").'))) : null,
+    h('section', { class: 'card subtle-card how-card' }, h('h2', null, icon('compass'), 'Hai bước gợi ý'),
+      h('ol', { class: 'guide-steps' },
+        h('li', null, h('b', null, 'Phân tích'), h('span', { class: 'muted', lang: 'en' }, ' (Analyze)'), ': tách chủ đề thành các nhánh không trùng, không sót (MECE), rồi nhìn thêm qua một góc hợp với chủ đề, ví dụ SWOT cho một quyết định, chuỗi nhân quả cho một hiện tượng.'),
+        h('li', null, h('b', null, 'Trình bày'), h('span', { class: 'muted', lang: 'en' }, ' (Present)'), ': ', howPresent)),
+      h('p', { class: 'muted small' }, 'Cả hai bước đều không bắt buộc. Mỗi chủ đề có gợi ý riêng trong phần "Cách phân tích và trình bày".')),
   );
 }
 
@@ -588,6 +621,8 @@ async function topicView(id: string) {
     onHide: () => { t.hideSuggestions = true; save().then(refresh); },
   })) : t.suggestions ? h('button', { class: 'btn ghost small', onclick: () => { t.hideSuggestions = false; save().then(refresh); } }, icon('bulb'), 'Hiện lại gợi ý') : null;
 
+  const guide = h('section', { class: 'card subtle-card' }, guidePanel(topicGuideInput(t), { hasAngles: !!t.suggestions?.plan.length }));
+
   const noteArea = (label: string, hint: string, key: 'understanding' | 'facts' | 'interpretation') => h('label', { class: 'field' }, label,
     h('textarea', { rows: 3, placeholder: hint, 'data-note': key, onchange: (e: Event) => { t[key] = (e.target as HTMLTextAreaElement).value; save(); } }, t[key] || ''));
   const notes = h('section', { class: 'card' }, h('h2', null, icon('note'), 'Ghi chú của tôi'),
@@ -661,7 +696,7 @@ async function topicView(id: string) {
     trendChart(scores),
     attempts.length ? h('ul', { class: 'attempts' }, [...attempts].reverse().map((a) => attemptRow(t, a, refresh))) : h('p', { class: 'muted' }, 'Chưa có lượt nói nào.'));
 
-  return h('div', { class: 'stack' }, head, sugg, h('div', { class: 'two-col even' },
+  return h('div', { class: 'stack' }, head, sugg, guide, h('div', { class: 'two-col even' },
     h('div', { class: 'stack' },
       notes,
       sources,
@@ -695,6 +730,13 @@ const PREP_STEPS = [
   { k: 'E', name: 'Example', vi: 'Ví dụ', share: 0.35, cue: 'Ví dụ như...' },
   { k: 'P', name: 'Point', vi: 'Chốt lại', share: 0.2, cue: 'Tóm lại...' },
 ];
+const BRANCH_STEPS = [
+  { k: '0', name: 'Overview', vi: 'Toàn cảnh', share: 0.15, cue: 'Mình sẽ đi qua ba ý...' },
+  { k: '1', name: 'Branch 1', vi: 'Nhánh thứ nhất', share: 0.22, cue: 'Thứ nhất...' },
+  { k: '2', name: 'Branch 2', vi: 'Nhánh thứ hai', share: 0.22, cue: 'Thứ hai...' },
+  { k: '3', name: 'Branch 3', vi: 'Nhánh thứ ba', share: 0.22, cue: 'Cuối cùng...' },
+  { k: 'Σ', name: 'Synthesis', vi: 'Tổng kết', share: 0.19, cue: 'Tóm lại...' },
+];
 const FEYNMAN_STEPS = [
   { k: '1', name: 'Simple', vi: 'Giảng như cho người mới', share: 0.3, cue: 'Nói đơn giản là...' },
   { k: '2', name: 'Why', vi: 'Vì sao lại như vậy', share: 0.3, cue: 'Vì sao? Bởi vì...' },
@@ -706,7 +748,7 @@ async function practiceView(id: string) {
   const t = await db.topic(id);
   if (!t) return h('section', { class: 'card' }, h('p', null, 'Không tìm thấy chủ đề.'));
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
-  let scaffold: Scaffold = (params.get('scaffold') as Scaffold) || (t.depth === 'minute' ? 'prep' : 'feynman');
+  let scaffold: Scaffold = (params.get('scaffold') as Scaffold) || (t.depth === 'minute' || t.depth === 'day' ? 'prep' : 'branches');
   let target = DEPTH_TARGET_SEC[t.depth];
   let attempt: Attempt | null = null;
   if (params.get('attempt')) attempt = (await db.attempts(id)).find((a) => a.id === params.get('attempt')) || null;
@@ -727,7 +769,7 @@ async function practiceView(id: string) {
   const after = h('div', { class: 'stack' });
 
   const renderSteps = (elapsed = -1) => {
-    const steps = scaffold === 'prep' ? PREP_STEPS : scaffold === 'feynman' ? FEYNMAN_STEPS : [];
+    const steps = scaffold === 'prep' ? PREP_STEPS : scaffold === 'branches' ? BRANCH_STEPS : scaffold === 'feynman' ? FEYNMAN_STEPS : [];
     let acc = 0;
     stepsEl.replaceChildren(...steps.map((s) => {
       const from = acc * target; acc += s.share; const to = acc * target;
@@ -738,7 +780,7 @@ async function practiceView(id: string) {
   };
   renderSteps();
 
-  const scaffoldSel = h('div', { class: 'seg', role: 'radiogroup' }, ([['none', 'Tự do'], ['prep', 'P.R.E.P'], ['feynman', 'Feynman']] as [Scaffold, string][]).map(([v, l]) =>
+  const scaffoldSel = h('div', { class: 'seg', role: 'radiogroup' }, ([['none', 'Tự do'], ['prep', 'P.R.E.P'], ['branches', 'Theo nhánh'], ['feynman', 'Feynman']] as [Scaffold, string][]).map(([v, l]) =>
     h('button', { type: 'button', class: v === scaffold ? 'on' : '', role: 'radio', 'aria-checked': String(v === scaffold), onclick: (e: Event) => {
       if (recording) return; scaffold = v; scaffoldSel.querySelectorAll('button').forEach((b) => { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); });
       (e.target as HTMLElement).classList.add('on'); (e.target as HTMLElement).setAttribute('aria-checked', 'true'); renderSteps();
@@ -853,7 +895,7 @@ async function practiceView(id: string) {
       h('section', { class: 'card center-col' }, ring, meter, recBtn, liveEl,
         h('div', { class: 'row wrap center' }, h('label', { class: 'field inline' }, 'Thời lượng', targetSel))),
       h('section', { class: 'card' }, h('h2', null, 'Khung nói'), scaffoldSel, stepsEl,
-        h('p', { class: 'muted small' }, scaffold === 'feynman' ? 'Giảng như cho một người chưa biết gì. Chỗ nào bạn vấp là lỗ hổng cần đọc lại.' : 'Mỗi bước sáng lên theo thời gian để bạn biết nên chuyển ý.'))),
+        h('p', { class: 'muted small' }, scaffold === 'feynman' ? 'Giảng như cho một người chưa biết gì. Chỗ nào bạn vấp là lỗ hổng cần đọc lại.' : scaffold === 'branches' ? 'Hợp với bài dài: nói toàn cảnh trước, rồi từng nhánh đã phân tích, cuối cùng tổng kết. Số nhánh tuỳ bạn.' : 'Mỗi bước sáng lên theo thời gian để bạn biết nên chuyển ý.'))),
     after);
 }
 
@@ -874,8 +916,8 @@ function scoreCard(m: Metrics, scores: number[], t: Topic) {
       part('Thời lượng', 'duration', `${fmtTime(m.durationSec)} / ${fmtTime(m.targetSec)}`, 'Gần mục tiêu (85%-110%) thì đủ điểm.')),
     h('h3', null, 'Dấu hiệu bề mặt (heuristic)'),
     h('div', { class: 'metrics' },
-      part(m.structure.kind === 'feynman' ? 'Cụm từ khung Feynman' : 'Cụm từ khung P.R.E.P', 'structure', `${Math.round(m.structure.score * 100)}%`,
-        'Chỉ dò các cụm như "theo tôi", "ví dụ", "tóm lại". ' + m.structure.hints.map((x) => `${x.found ? '✓' : '·'} ${x.label}`).join('   ')),
+      part(m.structure.kind === 'feynman' ? 'Cụm từ khung Feynman' : m.structure.kind === 'branches' ? 'Cụm từ chuyển nhánh' : 'Cụm từ khung P.R.E.P', 'structure', `${Math.round(m.structure.score * 100)}%`,
+        (m.structure.kind === 'branches' ? 'Chỉ dò các cụm như "mình sẽ đi qua", "thứ nhất", "tóm lại". ' : 'Chỉ dò các cụm như "theo tôi", "ví dụ", "tóm lại". ') + m.structure.hints.map((x) => `${x.found ? '✓' : '·'} ${x.label}`).join('   ')),
       m.coverage.items.length ? part('Trùng từ khoá với ý chính', 'coverage', `${Math.round(m.coverage.ratio * 100)}%`, `${m.coverage.items.filter((i) => i.state === 'covered').length}/${m.coverage.items.length} ý có từ khoá xuất hiện. So khớp từ, không chấm đúng sai.`) : null),
     m.coverage.items.length ? h('ul', { class: 'coverage' }, m.coverage.items.map((i) => h('li', { class: i.state }, h('span', { class: 'dot' }), i.point,
       h('span', { class: 'muted small' }, i.state === 'covered' ? ' có từ khoá' : i.state === 'partial' ? ' một phần từ khoá' : ' không thấy từ khoá')))) :

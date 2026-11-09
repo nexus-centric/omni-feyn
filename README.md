@@ -39,8 +39,13 @@ using the Feynman technique.
   split into "backed by sources" and "my interpretation, assumptions, uncertainties", sources with
   status and notes, my own questions, optional key points, a stage the user sets freely, reading
   log and optional milestones.
-- Speaking practice: target timer with progress ring, optional P.R.E.P or Feynman scaffold that
-  highlights the current part, in-browser recording (MediaRecorder), playback, history per topic.
+- Optional two-step guidance per topic, collapsed by default: Phân tích (Analyze), an issue tree
+  (MECE) plus one lens that fits the topic (SWOT for decisions, cause and effect for phenomena,
+  claim, evidence and counterargument for debated findings, key ideas and application for books),
+  then Trình bày (Present): PREP for 1 minute, main point plus branches for 1 day, branch by branch
+  for 1 week and Deep dive.
+- Speaking practice: target timer with progress ring, optional P.R.E.P, branch-by-branch or Feynman
+  scaffold that highlights the current part, in-browser recording (MediaRecorder), playback, history per topic.
 - Transcript: Whisper through transformers.js in a Web Worker. Auto model choice:
   whisper-large-v3-turbo (q4, about 760 MB) on WebGPU, PhoWhisper-small (Vietnamese fine-tune, q8,
   about 249 MB) on CPU/WASM, with automatic fallback. Whisper small and base selectable. Language
@@ -74,7 +79,7 @@ Other scripts:
 
 | Script | Purpose |
 | --- | --- |
-| `npm test` | Unit tests for metrics, normalisation, review schedule, bundle, topic bank integrity, bilingual duplicates, category balance, weighted no-repeat draws and workout draws |
+| `npm test` | Unit tests for metrics, normalisation, review schedule, bundle, topic bank integrity, bilingual duplicates, category balance, weighted no-repeat draws, guidance lens selection and workout draws |
 | `npm run build` | Type check and production build into `dist/` |
 | `npm run preview` | Serve the production build |
 | `node scripts/asr-bench.mjs [model ...]` | Transcribe the fixture with several Whisper models in headless Chromium (WASM) and report WER |
@@ -123,6 +128,7 @@ src/
     bank-more-*.ts      2026-11-06 expansion (minute, day, week and deep), with English titles and terms
     estimate.ts         effort and calendar estimates
     topic.ts            topic creation from the bank, optional plan adoption, normalisation
+    guide.ts            optional analyze/present guidance and lens selection
     types.ts
 tests/                  unit tests and audio fixture
 scripts/screenshots.mjs end-to-end test and screenshots

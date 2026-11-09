@@ -117,6 +117,26 @@ for (const d of ['day', 'week', 'deep']) {
   }
 }
 checks.accepted = accepted;
+async function guideShots(suffix) {
+  for (const [cat, d] of [['hien-tuong', 'day'], ['sach', 'week'], ['cong-viec', 'minute']]) {
+    await page.goto(BASE + `#/spin?d=${d}`); await page.waitForSelector('.pick-btn');
+    await page.selectOption('select[aria-label="Nhóm chủ đề"]', cat);
+    await page.click('.pick-btn'); await page.waitForSelector('.result-card'); await page.waitForTimeout(900);
+    await page.$eval('.result-card details.guide', (el) => { el.open = true; });
+    checks[`guide_${cat}_${d}_${suffix}`] = { title: await page.textContent('.result-title'), guide: await page.$$eval('.result-card details.guide .guide-step > p > b', (els) => els.map((e) => e.textContent.trim())) };
+    await page.evaluate(() => { const top = document.querySelector('.top'); if (top) top.style.position = 'static'; });
+    const el = await page.$('.result-card details.guide'); await el.scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+    await el.screenshot({ path: `screenshots/guide-${cat}-${d}-${suffix}.png` });
+  }
+  await page.goto(BASE + '#/spin?d=week'); await page.waitForSelector('.how-card');
+  await (await page.$('.how-card')).screenshot({ path: `screenshots/guide-overview-week-${suffix}.png` });
+  checks[`howCard_${suffix}`] = await page.textContent('.how-card');
+}
+await guideShots('1280');
+await page.goto(BASE + `#/topic/${accepted.week.id}`); await page.waitForSelector('.topic-head');
+await page.$eval('section details.guide', (el) => { el.open = true; });
+checks.topicGuide = await page.$$eval('section details.guide .guide-step > p > b', (els) => els.map((e) => e.textContent.trim()));
+await shot('topic-guide-1280');
 
 // Category filters for the new and priority areas: select, draw, and check the result stays in the group.
 async function filterShots(suffix, list) {
@@ -127,7 +147,9 @@ async function filterShots(suffix, list) {
     if (cat === 'sach' || cat === 'hien-tuong') await shot(`filter-${cat}-${d}-initial-${suffix}`);
     await page.click('.pick-btn'); await page.waitForSelector('.result-card', { timeout: 5000 }); await page.waitForTimeout(900);
     const chips = await page.$$eval('.result-card .chip', (els) => els.map((e) => e.textContent.trim()));
-    checks[`filter_${cat}_${d}_${suffix}`] = { label, vi: await page.textContent('.result-title'), en: await page.textContent('.result-card .title-en').catch(() => null), chips, bookNote: await page.isVisible('text=chưa gồm thời gian đọc trọn cuốn').catch(() => false) };
+    await page.$eval('.result-card details.guide', (el) => { el.open = true; });
+    const guide = await page.$$eval('.result-card details.guide .guide-step > p > b', (els) => els.map((e) => e.textContent.trim()));
+    checks[`filter_${cat}_${d}_${suffix}`] = { label, vi: await page.textContent('.result-title'), en: await page.textContent('.result-card .title-en').catch(() => null), chips, guide, bookNote: await page.isVisible('text=chưa gồm thời gian đọc trọn cuốn').catch(() => false) };
     await shot(`filter-${cat}-${d}-result-${suffix}`);
   }
 }
@@ -144,7 +166,11 @@ await filterShots('1280', [['cong-nghe', 'day'], ['kinh-te', 'week'], ['sach', '
     else { const again = await page.$('text=Đổi bài'); if (again) { await again.click(); await page.waitForTimeout(200); } else { await page.goto(BASE + '#/spin?d=day'); await page.waitForSelector('.pick-btn'); } }
   }
   checks.disputedFound = found;
-  if (found) await shot('result-disputed-1280');
+  if (found) {
+    await page.$eval('.result-card details.guide', (el) => { el.open = true; });
+    checks.disputedGuide = await page.$$eval('.result-card details.guide .guide-step > p > b', (els) => els.map((e) => e.textContent.trim()));
+    await shot('result-disputed-1280');
+  }
   await page.goto(BASE + '#/spin?d=week'); await page.waitForSelector('.pick-btn');
   await page.selectOption('select[aria-label="Nhóm chủ đề"]', 'sach');
   await page.click('.pick-btn'); await page.waitForSelector('.result-card'); await page.waitForTimeout(900);
@@ -210,6 +236,11 @@ await page.goto(BASE + `#/topic/${accepted.deep.id}`); await page.waitForSelecto
 await page.click('text=Sao chép để review >> nth=0'); await page.waitForSelector('.toast');
 const deepBundle = await page.evaluate(() => navigator.clipboard.readText()).catch((e) => 'clipboard read failed: ' + e.message);
 
+// Long topics default to the branch-by-branch speaking frame.
+await page.goto(BASE + `#/practice/${accepted.deep.id}`); await page.waitForSelector('.ring');
+checks.practiceDeepDefault = { selected: await page.textContent('.seg .on'), steps: await page.$$eval('ol.scaffold li b', (els) => els.map((e) => e.textContent)) };
+await shot('practice-branches-1280');
+
 // Mobile pass
 await page.setViewportSize({ width: 390, height: 844 });
 const overflowAt = [];
@@ -217,6 +248,7 @@ const chk = async (name) => { if (await page.evaluate(() => document.documentEle
 await page.goto(BASE + '#/'); await page.waitForSelector('.hero'); await shot('home-390'); await chk('home');
 await spinShots('390'); await chk('spin');
 await filterShots('390', [['sach', 'day'], ['hien-tuong', 'minute'], ['kinh-te', 'week']]); await chk('filter');
+await guideShots('390'); await chk('guide');
 await page.goto(BASE + '#/' + checks.bookAccepted.url.split('#/')[1]); await page.waitForSelector('.topic-head'); await shot('topic-book-accepted-390'); await chk('topic-book');
 await page.goto(BASE + '#/topics'); await page.waitForSelector('.topic-card'); await shot('topics-390'); await chk('topics');
 await page.goto(BASE + `#/topic/${accepted.deep.id}`); await page.waitForSelector('.topic-head'); await shot('topic-accepted-390'); await chk('topic');

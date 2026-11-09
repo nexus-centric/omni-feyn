@@ -143,6 +143,12 @@ export const FEYNMAN_MARKERS = {
   gap: ['chưa rõ', 'không chắc', 'mình chưa hiểu', 'cần tìm hiểu', 'chưa biết'],
 };
 
+export const BRANCH_MARKERS = {
+  overview: ['tổng quan', 'bức tranh chung', 'mình sẽ đi qua', 'tôi sẽ đi qua', 'mình sẽ nói', 'tôi sẽ nói', 'gồm ba', 'gồm hai', 'gồm bốn', 'có ba ý', 'có hai ý', 'có bốn ý', 'có ba phần', 'chia thành', 'overview'],
+  signpost: ['thứ nhất', 'thứ hai', 'thứ ba', 'thứ tư', 'đầu tiên', 'tiếp theo', 'nhánh', 'khía cạnh', 'mặt khác', 'cuối cùng', 'first', 'second', 'third'],
+  close: ['tóm lại', 'tổng kết', 'kết luận', 'nhìn chung', 'điều rút ra', 'nói chung lại', 'in summary'],
+};
+
 export interface StructureHint { key: string; label: string; found: boolean; where: number | null; }
 
 function findPhrase(normText: string, phrase: string): number {
@@ -182,9 +188,23 @@ export function feynmanStructure(text: string): { hints: StructureHint[]; score:
   return { hints, longSentences, score: Math.min(1, found / 3) * (longSentences > 2 ? 0.8 : 1) };
 }
 
+/** Branch-by-branch talk: an overview, at least two signposted branches, and a synthesis. */
+export function branchStructure(text: string): { hints: StructureHint[]; score: number } {
+  const n = normalizeVi(text);
+  const hitsOf = (k: keyof typeof BRANCH_MARKERS) => BRANCH_MARKERS[k].map((m) => findPhrase(n, m)).filter((p) => p >= 0);
+  const ov = hitsOf('overview'), sp = hitsOf('signpost'), cl = hitsOf('close');
+  const hints: StructureHint[] = [
+    { key: 'overview', label: 'Toàn cảnh (overview)', found: ov.length > 0, where: ov.length ? Math.min(...ov) : null },
+    { key: 'signpost', label: `Chuyển nhánh rõ ràng (${sp.length} dấu hiệu)`, found: sp.length >= 2, where: sp.length ? Math.min(...sp) : null },
+    { key: 'close', label: 'Tổng kết (synthesis)', found: cl.length > 0, where: cl.length ? Math.max(...cl) : null },
+  ];
+  const score = (ov.length ? 0.3 : 0) + Math.min(1, sp.length / 3) * 0.4 + (cl.length ? 0.3 : 0);
+  return { hints, score };
+}
+
 // ---------- score card ----------
 
-export type Scaffold = 'none' | 'prep' | 'feynman';
+export type Scaffold = 'none' | 'prep' | 'branches' | 'feynman';
 
 export interface MetricsInput {
   transcript: string;
@@ -249,7 +269,9 @@ export function computeMetrics(input: MetricsInput): Metrics {
   const cov = coverage(input.transcript, input.keyPoints);
   const structure = input.scaffold === 'feynman'
     ? { kind: input.scaffold, ...feynmanStructure(input.transcript) }
-    : { kind: input.scaffold, ...prepStructure(input.transcript) };
+    : input.scaffold === 'branches'
+      ? { kind: input.scaffold, ...branchStructure(input.transcript) }
+      : { kind: input.scaffold, ...prepStructure(input.transcript) };
   const parts: Record<string, number> = {
     pace: paceScore(wpm),
     fillers: fillerScore(fillers.ratio),

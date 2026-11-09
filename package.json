@@ -12,7 +12,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsc -p tsconfig.test.json && node --test tmp/test-build/tests/metrics.test.js tmp/test-build/tests/bank.test.js tmp/test-build/tests/plan.test.js tmp/test-build/tests/bilingual.test.js tmp/test-build/tests/content.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test tmp/test-build/tests/metrics.test.js tmp/test-build/tests/bank.test.js tmp/test-build/tests/plan.test.js tmp/test-build/tests/bilingual.test.js tmp/test-build/tests/content.test.js tmp/test-build/tests/guide.test.js",
     "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {

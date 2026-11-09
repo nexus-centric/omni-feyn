@@ -200,12 +200,49 @@ pace never changes the effort estimate. Limitations: the ranges and the complexi
 editorial judgement, not derived from study data, and individual variation is large. The UI says
 so next to every estimate.
 
-## 5. Speaking structure: P.R.E.P
+## 5. Optional guidance: analyze, then present (revised 2026-11-09)
 
-P.R.E.P (Point, Reason, Example, Point) is the default for 1-minute prompts, matching the
-inspiration site. During recording the scaffold highlights the current part on a time budget of
-15 / 30 / 35 / 20 percent of the target, so the speaker knows when to move on. After recording,
-a marker search checks that each part appears and that the closing point is in the second half.
+The single P.R.E.P frame was replaced by two optional steps, shown in a collapsed panel
+"Cách phân tích và trình bày" on the explore result and on the topic page, plus a short overview
+card on the explore page. Topics stay random; nothing in the guidance is required or saved into the
+topic. The logic is in `src/core/guide.ts` and is tested in `tests/guide.test.ts`.
+
+Step 1, Phân tích (Analyze). Every topic gets an issue tree in the MECE sense: one key question,
+three to five branches that do not overlap (mutually exclusive) and together cover the question
+(collectively exhaustive). When the bank has suggested angles, the panel says they can seed the
+branches but should be checked for overlaps and gaps. Next to the tree, exactly one secondary lens
+is chosen from the topic type, in this order:
+
+| Condition | Lens |
+| --- | --- |
+| Topic flagged as debated ("Còn tranh luận") | Claim, evidence, counterargument, current verdict |
+| Book topic | Central question, key ideas, application, critique |
+| Personal or business decision (keywords such as "có nên mua", "khởi nghiệp", "should you", "worth it", "strategy"), only in economics, work, technology, DevOps, personal growth or education | SWOT |
+| Public policy question ("Should X be...", "Who should...") | Stakeholder map |
+| Phenomena, science, environment, economics, psychology | Cause and effect chain (conditions, mechanism, effects, limits) |
+| Technology, DevOps | How it works and trade-offs |
+| History | Context, events, causes, consequences |
+| Society, world | Stakeholder map |
+| Culture, education, work, personal growth, custom topics without a category | Multiple perspectives |
+
+SWOT is limited on purpose: it applies to 13 of the 565 bank subjects, and tests assert that
+phenomena, science, history, society, psychology, culture, environment and book topics never get it.
+
+Step 2, Trình bày (Present):
+
+| Depth | Mode | Steps |
+| --- | --- | --- |
+| 1 minute | PREP | Point, Reason, Example, Point |
+| 1 day | PREP with branches | Main point, two or three branches as reasons each with an example, closing point |
+| 1 week, Deep dive | Branch by branch (pyramid) | Overview with the list of branches, each branch conclusion first, connections, synthesis |
+
+The practice screen offers four speaking frames: Tự do, P.R.E.P, Theo nhánh (branch by branch) and
+Feynman. The default is P.R.E.P for 1 minute and 1 day, and Theo nhánh for 1 week and Deep dive.
+Each frame highlights the current part on a time budget (P.R.E.P 15 / 30 / 35 / 20 percent; branch
+by branch 15 / 22 / 22 / 22 / 19 percent). After recording, a marker search checks the structure:
+for P.R.E.P that each part appears and the closing point is in the second half; for branch by branch
+that there is an overview phrase, at least two signposts ("thứ nhất", "tiếp theo", "cuối cùng") and
+a closing summary. These are phrase heuristics, not an understanding of the talk.
 
 ## 6. Speech metrics (no LLM)
 
@@ -230,7 +267,7 @@ Metrics and their weights in the 0 to 100 score:
 | Fillers | 20 | Vietnamese and English filler list, longest phrase first so "kiểu như" is not also counted as "kiểu"; tones are kept so "à" is a filler but "a" and "ạ" are not |
 | Long pauses | 15 | silent runs of 1.5 s or more inside the speech, from frame RMS energy with an adaptive threshold; Whisper timestamps as fallback |
 | Duration | 10 | 85 to 110 percent of target is full marks |
-| Structure | 10 | P.R.E.P or Feynman markers |
+| Structure | 10 | P.R.E.P, branch-by-branch or Feynman markers |
 | Key point coverage | 25 | only when the topic has key points; content words after stopword removal, diacritic-insensitive, exact match for short syllables, edit-distance tolerance only for long tokens (Vietnamese syllables like "cong" and "con" differ by one letter) |
 
 The aggregate is labelled "delivery score" everywhere, never understanding or accuracy. The card is

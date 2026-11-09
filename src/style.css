@@ -426,3 +426,15 @@ summary > .ic { margin-right: .1rem; }
 .warn { display: flex; gap: .4rem; align-items: flex-start; }
 .kw .ic { width: 1em; height: 1em; margin-right: .25rem; color: var(--ink-2); }
 .chip.disputed { background: #fff1d6; color: #9a6700; }
+
+/* optional analyze / present guidance */
+.guide { margin-top: 1rem; border-top: 1px dashed var(--line); padding-top: .7rem; }
+.guide summary { cursor: pointer; font-weight: 700; color: var(--grape); }
+.subtle-card .guide { margin-top: 0; border-top: 0; padding-top: 0; }
+.guide-step { margin-top: .9rem; }
+.guide-step h4 { display: flex; align-items: center; gap: .45rem; margin: 0 0 .35rem; }
+.guide-num { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--grape); color: #fff; font-size: .8rem; }
+.guide p { margin: .3rem 0; }
+.guide-steps { margin: .3rem 0 .5rem; padding-left: 1.25rem; }
+.guide-steps li { margin: .2rem 0; line-height: 1.45; overflow-wrap: anywhere; }
+.how-card h2 { display: flex; align-items: center; gap: .4rem; }
