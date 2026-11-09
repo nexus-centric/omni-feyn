@@ -1,5 +1,6 @@
 // IndexedDB storage: topics, attempts, audio blobs, settings. No dependencies.
 import type { Attempt, Topic } from './core/types';
+import { englishTitle, normalizeTopic } from './core/topic';
 
 const DB_NAME = 'omni-feyn';
 const VERSION = 1;
@@ -32,10 +33,10 @@ async function store(name: string, mode: IDBTransactionMode = 'readonly') {
 
 export const db = {
   async topics(): Promise<Topic[]> {
-    const all = (await p((await store('topics')).getAll())) as Topic[];
+    const all = ((await p((await store('topics')).getAll())) as Topic[]).map(normalizeTopic);
     return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
-  async topic(id: string): Promise<Topic | undefined> { return p((await store('topics')).get(id)) as Promise<Topic | undefined>; },
+  async topic(id: string): Promise<Topic | undefined> { const t = (await p((await store('topics')).get(id))) as Topic | undefined; return t && normalizeTopic(t); },
   async saveTopic(t: Topic): Promise<void> { t.updatedAt = new Date().toISOString(); await p((await store('topics', 'readwrite')).put(t)); },
   async deleteTopic(id: string): Promise<void> {
     for (const a of await db.attempts(id)) await db.deleteAttempt(a);
@@ -67,11 +68,14 @@ function blobToB64(b: Blob): Promise<string> {
 }
 
 export async function exportBackup(includeAudio: boolean): Promise<Blob> {
-  const topics = await db.topics();
+  const topics = (await db.topics()).map((t) => (t.titleEn === undefined && englishTitle(t) ? { ...t, titleEn: englishTitle(t) } : t));
   const attempts = await db.attempts();
   const audio: Record<string, string> = {};
   if (includeAudio) for (const a of attempts) if (a.audioId) { const b = await db.audio(a.audioId); if (b) audio[a.audioId] = await blobToB64(b); }
-  const data = { app: 'omni-feyn', version: 1, exportedAt: new Date().toISOString(), topics, attempts, audio };
+  const bodySessions = await db.getSetting<unknown[]>('bodySessions', []);
+  const bodyWeek = await db.getSetting<unknown[] | null>('bodyWeek', null);
+  const bodyLevel = await db.getSetting<number | null>('bodyLevel', null);
+  const data = { app: 'omni-feyn', version: 1, exportedAt: new Date().toISOString(), topics, attempts, audio, bodySessions, bodyWeek, bodyLevel };
   return new Blob([JSON.stringify(data)], { type: 'application/json' });
 }
 
@@ -83,6 +87,13 @@ export async function importBackup(file: File): Promise<{ topics: number; attemp
   for (const [id, url] of Object.entries((data.audio || {}) as Record<string, string>)) {
     await db.saveAudio(id, await (await fetch(url)).blob());
   }
+  if (Array.isArray(data.bodySessions)) {
+    const cur = await db.getSetting<{ id: string }[]>('bodySessions', []);
+    const ids = new Set(cur.map((x) => x.id));
+    await db.setSetting('bodySessions', [...cur, ...data.bodySessions.filter((x: { id: string }) => !ids.has(x.id))]);
+  }
+  if (Array.isArray(data.bodyWeek) && data.bodyWeek.length === 7) await db.setSetting('bodyWeek', data.bodyWeek);
+  if ([1, 2, 3].includes(data.bodyLevel)) await db.setSetting('bodyLevel', data.bodyLevel);
   return { topics: data.topics.length, attempts: (data.attempts || []).length };
 }
 

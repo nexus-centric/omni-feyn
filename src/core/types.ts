@@ -22,6 +22,24 @@ export interface Topic {
   readingLog: LogEntry[];
   milestones: Milestone[];
   review: ReviewState | null;
+  /** Starter search keywords (from the topic bank). */
+  keywords?: string[];
+  /** Id of the bank item this topic was drawn from. */
+  bankId?: string;
+  /** Editorial complexity of a bank subject (1 light, 2 medium, 3 heavy); scales the estimate only. */
+  complexity?: 1 | 2 | 3;
+  /** Optional suggestions from the bank. Shown as hideable hints, never required. */
+  /** Optional English title; built-in subjects get it from the bank, custom topics only if the user writes one. */
+  titleEn?: string;
+  suggestions?: { disputed?: boolean; book?: boolean; core: string; plan: string[]; keywords: string[]; en: string; enTerms: string[]; sources: { title: string; url: string; org: string }[] };
+  hideSuggestions?: boolean;
+  /** User-adjustable plan: own hour range and session assumptions. */
+  plan?: { hours?: [number, number]; sessionMin?: number; sessionsPerWeek?: number };
+  /** Optional free-form notes. */
+  direction?: string;
+  understanding?: string;
+  facts?: string;
+  interpretation?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,9 +63,9 @@ export const DEPTH_LABEL: Record<Depth, string> = {
 };
 export const DEPTH_HINT: Record<Depth, string> = {
   minute: 'Bốc chủ đề, nói ngay theo phản xạ',
-  day: 'Đọc vài nguồn, hiểu ý chính trong một ngày',
-  week: 'Tìm hiểu có hệ thống trong một tuần',
-  deep: 'Hàng tuần đến hàng tháng: nhật ký đọc, cột mốc',
+  day: 'Phạm vi gọn, thường đủ cho một ngày',
+  week: 'Phạm vi rộng hơn, thường vài buổi trong tuần',
+  deep: 'Chủ đề lớn, đi chậm theo nhịp của bạn',
 };
 export const DEPTH_TARGET_SEC: Record<Depth, number> = { minute: 60, day: 180, week: 300, deep: 600 };
 export const STAGES: Stage[] = ['explore', 'understand', 'explain', 'review'];
@@ -55,8 +73,8 @@ export const STAGE_LABEL: Record<Stage, string> = {
   explore: 'Khám phá', understand: 'Hiểu', explain: 'Giải thích', review: 'Ôn lại',
 };
 export const STAGE_HINT: Record<Stage, string> = {
-  explore: 'Gom nguồn, ghi câu hỏi cốt lõi',
-  understand: 'Đọc, rút ý chính, ghi câu hỏi mở',
-  explain: 'Giảng lại bằng lời đơn giản, tìm lỗ hổng',
-  review: 'Ôn theo lịch giãn cách',
+  explore: 'Đang dạo quanh chủ đề, gom nguồn',
+  understand: 'Đang đọc và tự ghi lại ý của mình',
+  explain: 'Thử giảng lại bằng lời đơn giản',
+  review: 'Thỉnh thoảng giảng lại để nhớ lâu',
 };

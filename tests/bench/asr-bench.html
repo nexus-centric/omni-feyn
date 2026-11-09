@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>ASR bench</title>
+<script type="module">
+import { transcribeWhisper } from '/src/asr.ts';
+import { decodeTo16k } from '/src/audio.ts';
+window.bench = async (model) => {
+  const blob = await (await fetch('/tests/fixtures/prep-vi.wav')).blob();
+  const s = await decodeTo16k(blob);
+  const t0 = performance.now(); let mb = 0;
+  const r = await transcribeWhisper(s, model, (p) => { if (p.total) mb = p.total / 1e6; }, 'wasm');
+  return { model: r.model, device: r.device, text: r.text, sec: (performance.now() - t0) / 1000, downloadMB: Math.round(mb) };
+};
+window.ready = true;
+</script>
