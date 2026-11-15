@@ -443,3 +443,13 @@ Vite and TypeScript, no UI framework. Pure logic (metrics, review schedule, Mark
 normalisation, topic bank and drawer, workout schedule, swaps and checks, estimates, topic creation and normalisation) lives in `src/core` and is unit tested with the Node test runner. Data is stored in
 IndexedDB (topics, attempts, audio blobs, settings) with JSON export and import (audio optional,
 as data URLs). No backend, no accounts, no analytics.
+
+Backup format 2 (`src/core/backup.ts`): `{ app: "omni-feyn", version: 2, exportedAt, topics,
+attempts, audio, settings }`, where `settings` holds the keys `settings` (speech engine, model,
+device, language, sound), `spinDepth`, `spinCat-<depth>`, `bodySessions`, `bodyWeek` and
+`bodyLevel`. The same-day `bodyToday` override is not backed up. Format 1 (body data at the top
+level, no other preferences) is still read. Import normalizes topics, rebuilds attempts field by
+field, drops attempts whose topic is missing, keeps only `data:audio/*;base64` URLs referenced by an
+imported attempt, and rejects files from a newer format. Merge adds records with new ids, unions
+workout sessions by id and only fills preferences that are not set; replace clears the four stores
+first. Both run in one IndexedDB transaction so a failure leaves current data untouched.

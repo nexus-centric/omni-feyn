@@ -1,6 +1,7 @@
 import './style.css';
 import { h, toast, fmtTime, fmtDate, trendChart } from './ui';
-import { db, uid, exportBackup, importBackup } from './db';
+import { db, uid, exportBackup, previewBackup, applyBackup, storedAudioBytes, type ImportPreview } from './db';
+import { AUDIO_WARN_BYTES } from './core/backup';
 import { guideFor, type GuideInput, type GuideStep } from './core/guide';
 import { BANK, CATEGORIES, CATEGORY, Drawer, categoriesFor, type BankItem } from './core/bank';
 import { SOURCES_CHECKED_ON } from './core/bank-meta';
@@ -930,11 +931,17 @@ function scoreCard(m: Metrics, scores: number[], t: Topic) {
 
 async function settingsView() {
   const save = () => db.setSetting('settings', settings);
-  const fileIn = h('input', { type: 'file', accept: 'application/json', hidden: true, onchange: async () => {
-    const f = fileIn.files?.[0]; if (!f) return;
-    try { const r = await importBackup(f); toast(`Đã nhập ${r.topics} chủ đề, ${r.attempts} lượt nói`); } catch (e) { toast(String(e)); }
+  const previewBox = h('div', { class: 'import-preview', hidden: true });
+  const fileIn = h('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: async () => {
+    const f = fileIn.files?.[0]; fileIn.value = ''; if (!f) return;
+    try { showImportPreview(previewBox, await previewBackup(await f.text())); } catch (e) { toast((e as Error).message || String(e)); }
   } });
   const withAudio = h('input', { type: 'checkbox', checked: true });
+  const audioNote = h('span', { class: 'muted small' });
+  storedAudioBytes().then(({ count, bytes }) => {
+    const mb = bytes / 1048576;
+    audioNote.textContent = count ? ` ${count} bản ghi, khoảng ${mb.toFixed(1)} MB (tệp JSON lớn hơn khoảng 1/3 do mã hoá base64).${bytes > AUDIO_WARN_BYTES ? ' Tệp lớn có thể mở chậm; có thể bỏ chọn để chỉ sao lưu văn bản.' : ''}` : ' Chưa có bản ghi âm nào.';
+  });
   const gpu = await detectWebGPU();
   const autoInfo = WHISPER_MODELS.find((m) => m.id === AUTO_MODEL[gpu ? 'webgpu' : 'wasm'])!;
   const dev: 'webgpu' | 'wasm' = settings.device === 'wasm' || !gpu ? 'wasm' : 'webgpu';
@@ -969,13 +976,51 @@ async function settingsView() {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: settings.sound, onchange: (e: Event) => { settings.sound = (e.target as HTMLInputElement).checked; save(); } }), ' Âm thanh nhẹ khi chọn chủ đề và khi hẹn giờ'),
       h('p', { class: 'muted small' }, 'Hoạt ảnh tự tắt nếu hệ điều hành bật "giảm chuyển động".')),
     h('section', { class: 'card' }, h('h2', null, icon('save'), 'Sao lưu dữ liệu'),
-      h('p', { class: 'muted small' }, 'Dữ liệu nằm trong IndexedDB của trình duyệt này. Hãy xuất tệp JSON định kỳ.'),
-      h('label', { class: 'check' }, withAudio, ' Kèm bản ghi âm (tệp lớn hơn)'),
+      h('p', { class: 'muted small' }, 'Dữ liệu nằm trong IndexedDB của trình duyệt này. Tệp JSON gồm chủ đề, lượt nói và chỉ số, lịch tập, nhật ký vận động và mọi tuỳ chọn; bản ghi âm là tuỳ chọn. Hãy xuất định kỳ.'),
+      h('label', { class: 'check' }, withAudio, ' Kèm bản ghi âm', audioNote),
       h('div', { class: 'actions' },
         h('button', { class: 'btn', onclick: async () => {
-          const b = await exportBackup(withAudio.checked); const a = h('a', { href: URL.createObjectURL(b), download: `omni-feyn-${today()}.json` }); a.click();
+          const { blob, counts } = await exportBackup(withAudio.checked);
+          const url = URL.createObjectURL(blob);
+          const a = h('a', { href: url, download: `omni-feyn-${today()}.json` }); a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 10_000);
+          toast(`Đã xuất ${counts.topics} chủ đề, ${counts.attempts} lượt nói, ${counts.audio} bản ghi âm (${(blob.size / 1048576).toFixed(1)} MB)`);
         } }, 'Xuất JSON'),
-        h('button', { class: 'btn ghost', onclick: () => fileIn.click() }, 'Nhập JSON'), fileIn)));
+        h('button', { class: 'btn ghost', onclick: () => fileIn.click() }, 'Nhập JSON'), fileIn),
+      previewBox));
+}
+
+function showImportPreview(box: HTMLElement, pre: ImportPreview) {
+  const row = (label: string, k: keyof ImportPreview['file']) => h('tr', null, h('td', null, label), h('td', null, String(pre.file[k])), h('td', null, String(pre.current[k])), h('td', null, `+${pre.merge.added[k]}`));
+  const sure = h('input', { type: 'checkbox' });
+  const sureRow = h('label', { class: 'check danger-text', hidden: true }, sure, ' Tôi hiểu dữ liệu hiện tại sẽ bị thay và không hoàn tác được.');
+  let mode: 'merge' | 'replace' = 'merge';
+  const pick = (m: 'merge' | 'replace') => () => { mode = m; sureRow.hidden = m !== 'replace'; };
+  const d = pre.parsed.data;
+  box.replaceChildren(
+    h('h3', null, 'Xem trước bản sao lưu'),
+    h('p', { class: 'muted small' }, `Tạo lúc ${d.exportedAt ? fmtDate(d.exportedAt) : 'không rõ'} · định dạng ${d.version}` + (pre.parsed.dropped ? ` · bỏ qua ${pre.parsed.dropped} mục không hợp lệ` : '')),
+    h('table', { class: 'import-table' },
+      h('thead', null, h('tr', null, h('th'), h('th', null, 'Trong tệp'), h('th', null, 'Hiện có'), h('th', null, 'Gộp sẽ thêm'))),
+      h('tbody', null, row('Chủ đề', 'topics'), row('Lượt nói', 'attempts'), row('Bản ghi âm', 'audio'), row('Buổi vận động', 'bodySessions'), row('Tuỳ chọn', 'settings'))),
+    h('label', { class: 'radio' }, h('input', { type: 'radio', name: 'imp-mode', checked: true, onchange: pick('merge') }),
+      h('span', null, h('b', null, 'Gộp vào dữ liệu hiện tại'), h('br'), h('span', { class: 'muted small' }, 'Chỉ thêm mục chưa có; không xoá hay ghi đè. Tuỳ chọn hiện tại được giữ nguyên.'))),
+    h('label', { class: 'radio' }, h('input', { type: 'radio', name: 'imp-mode', onchange: pick('replace') }),
+      h('span', null, h('b', null, 'Thay toàn bộ'), h('br'), h('span', { class: 'muted small' }, 'Xoá dữ liệu hiện tại trong trình duyệt này rồi nạp nội dung tệp.'))),
+    sureRow,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', onclick: async () => {
+        if (mode === 'replace' && !sure.checked) { toast('Hãy đánh dấu xác nhận trước khi thay toàn bộ dữ liệu'); return; }
+        try {
+          const r = await applyBackup(pre, mode);
+          toast(mode === 'merge' ? `Đã gộp: thêm ${r.topics} chủ đề, ${r.attempts} lượt nói, ${r.bodySessions} buổi vận động` : `Đã thay bằng ${r.topics} chủ đề, ${r.attempts} lượt nói`);
+          box.hidden = true;
+          settings = { ...settings, ...(await db.getSetting<Partial<Settings>>('settings', {})) };
+        } catch (e) { toast('Không khôi phục được: ' + ((e as Error).message || String(e))); }
+      } }, 'Khôi phục'),
+      h('button', { class: 'btn ghost', onclick: () => { box.hidden = true; } }, 'Huỷ')));
+  box.hidden = false;
+  box.scrollIntoView({ block: 'nearest' });
 }
 
 // ---------- boot ----------

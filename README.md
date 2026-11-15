@@ -62,8 +62,11 @@ using the Feynman technique.
   moderate cardio days, one mobility day, one rest day), editable per weekday with warnings, a
   today panel, a same-zone same-level swap for each move, interval timer, 14-day history kept
   separate from research progress. Not medical advice; no calorie estimates.
-- IndexedDB storage, JSON backup export and import (audio optional, workout sessions, weekly
-  schedule and level included), installable web app manifest. Older saved topics load unchanged.
+- IndexedDB storage and a versioned JSON backup (format 2) of all user data: topics, attempts with
+  transcripts and metrics, workout sessions, weekly schedule and level, speech engine and explore
+  preferences; recordings optional. Import validates the file, shows counts first, and offers merge
+  (adds only new records, never overwrites) or replace (with an extra confirmation), written in one
+  IndexedDB transaction. Format 1 files still import. Installable web app manifest.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the design rationale and sources.
 
@@ -98,7 +101,9 @@ Actions are pinned by commit SHA; Dependabot updates npm packages and actions we
 Everything is stored in your browser (IndexedDB). Whisper runs locally; the only network requests
 are the one-time model download from the Hugging Face Hub (and web searches you open from keyword chips). If you choose the Web Speech API engine,
 your browser sends audio to its vendor for recognition. Export a JSON backup regularly; clearing
-site data deletes your topics and recordings.
+site data deletes your topics and recordings. Recordings are stored as base64 data URLs in the
+backup, about 4/3 of their original size; Settings shows the total before export and suggests a
+text-only backup above 50 MB.
 
 ## Project layout
 
@@ -108,7 +113,7 @@ public/                 manifest and icon
 src/
   main.ts               views and routing (hash based)
   ui.ts                 DOM helpers, trend chart
-  db.ts                 IndexedDB and JSON backup
+  db.ts                 IndexedDB and JSON backup I/O (format and merge rules in core/backup.ts)
   audio.ts              MediaRecorder wrapper, decode to 16 kHz mono
   asr.ts                Whisper worker client, Web Speech wrapper
   whisper.worker.ts     transformers.js pipeline in a Web Worker

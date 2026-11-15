@@ -438,3 +438,13 @@ summary > .ic { margin-right: .1rem; }
 .guide-steps { margin: .3rem 0 .5rem; padding-left: 1.25rem; }
 .guide-steps li { margin: .2rem 0; line-height: 1.45; overflow-wrap: anywhere; }
 .how-card h2 { display: flex; align-items: center; gap: .4rem; }
+
+/* Backup import preview */
+.import-preview { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.import-preview[hidden] { display: none; }
+.import-table { width: 100%; border-collapse: collapse; font-size: .9rem; margin: .5rem 0 .75rem; }
+.import-table th, .import-table td { padding: .35rem .4rem; border-bottom: 1px solid var(--line); text-align: right; }
+.import-table th:first-child, .import-table td:first-child { text-align: left; }
+.import-table th { font-weight: 600; color: var(--muted); font-size: .8rem; }
+.danger-text { color: var(--low); }
+.check[hidden] { display: none; }
